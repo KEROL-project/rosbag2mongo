@@ -1,0 +1,15 @@
+/**:
+  ros__parameters:
+    bag_file_path: /path/to/dir/with/rosbags/for/skill
+    dataset_name: skill-name
+    robot_name: jessie
+    lowest_frequency_topic: /camera/left_camera/color/image_raw
+    observation_topics:
+      - '/camera/left_camera/color/image_raw'
+      - '/camera/head_camera/color/image_raw'
+      - '/left_arm_xarm/joint_states'
+    observation_param_names:
+      - 'left_camera_image'
+      - 'head_camera_image'
+      - 'left_arm_joint_states'
+    action_topic: /left_arm_xarm/robot_states
