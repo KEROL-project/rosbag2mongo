@@ -24,7 +24,6 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='rosbag2mongo',
-            namespace='kerol',
             executable='rosbag2mongo',
             name='rosbag2mongo_converter',
             parameters=[config_file_path,
