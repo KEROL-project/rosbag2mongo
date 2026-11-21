@@ -40,21 +40,26 @@ class Rosbag2MongoConverter(Node):
                                                        rclpy.Parameter('msg_package_names', rclpy.Parameter.Type.STRING_ARRAY, [])).value
         self.msg_package_paths = self.get_parameter_or('msg_package_paths',
                                                        rclpy.Parameter('msg_package_paths', rclpy.Parameter.Type.STRING_ARRAY, [])).value
-
+        self.synchronised_conversion = self.get_parameter_or('synchronised_conversion',
+                                                             rclpy.Parameter('synchronised_conversion', rclpy.Parameter.Type.BOOL, True)).value
 
         self.observation_topics_to_names = {}
         for i in range(len(self.observation_topics)):
             self.observation_topics_to_names[self.observation_topics[i]] = self.observation_param_names[i]
 
-        self.get_logger().info(str(self.msg_package_names))
-        self.get_logger().info(str(self.msg_package_paths))
-        self.get_logger().info(self.lowest_frequency_topic)
-        self.get_logger().info(str(self.observation_topics))
-        self.get_logger().info(str(self.observation_topics_to_names))
-        self.get_logger().info(self.action_topic)
-        self.get_logger().info(self.bag_file_path)
-        self.get_logger().info(self.dataset_name)
-        self.get_logger().info(self.robot_name)
+        self.get_logger().info('Initialising converter with the following parameters:')
+        self.get_logger().info('-----------------------------------------------------')
+        self.get_logger().info(f'synchronised_conversion: {str(self.synchronised_conversion)}')
+        self.get_logger().info(f'package_names: {str(self.msg_package_names)}')
+        self.get_logger().info(f'package_paths: {str(self.msg_package_paths)}')
+        self.get_logger().info(f'lowest_frequency_topic: {self.lowest_frequency_topic}')
+        self.get_logger().info(f'observation_topics: {str(self.observation_topics)}')
+        self.get_logger().info(f'observation_topics_to_names: {str(self.observation_topics_to_names)}')
+        self.get_logger().info(f'action_topic: {self.action_topic}')
+        self.get_logger().info(f'bag_file_path: {self.bag_file_path}')
+        self.get_logger().info(f'dataset_name: {self.dataset_name}')
+        self.get_logger().info(f'robot_name: {self.robot_name}')
+        self.get_logger().info('-----------------------------------------------------')
         self.typestore = get_typestore(Stores.LATEST)
 
     def register_custom_types(self, package_names: Sequence[str], package_paths: Sequence[str]):
@@ -186,6 +191,45 @@ class Rosbag2MongoConverter(Node):
             self.get_logger().error("Exception: %s" % str(exc))
             db_client.close()
 
+    def convert_bag_to_mongo_unsynchronised(self, bag_path: str,
+                                            topics: Sequence[str],
+                                            topics_to_names: Dict[str,str],
+                                            dataset_name: str,
+                                            robot_name: str):
+        """Converts a rosbag to a MongoDB dataset, such that each topic
+        is logged in a separate collection, with each message being logged
+        as a separate document.
+
+        Keyword arguments:
+        bag_path: str -- Absolute path of a rosbag
+        topics: Sequence[str]: Names of the topics that should be considered in the conversion
+        topics_to_names: Dict[str,str] -- A dictionary in which the keys are topic names (from topics)
+                                          and the values are topic names in the Mongo dataset
+                                          (e.g. {'/camera/image/raw': 'image'})
+        dataset_name: str --- Name of the output dataset
+        robot_name: str --- Name of the robot that produced the dataset
+
+        """
+        db_client = Rosbag2MongoConverter.get_db_client()
+        database = db_client[f'{robot_name}-{dataset_name}']
+
+        try:
+            self.get_logger().info('Processing rosbag %s' % bag_path)
+
+            with RosbagReader(bag_path) as reader:
+                for connection, timestamp, raw_data in reader.messages():
+                    if connection.topic not in topics:
+                        continue
+
+                    msg = self.typestore.deserialize_cdr(raw_data, connection.msgtype)
+                    msg_data = self.extract_msg_data(msg, connection.msgtype)
+                    collection = database[topics_to_names[connection.topic]]
+                    data_document = {'timestamp': int(timestamp / 10**9), 'data': msg_data}
+                    collection.insert_one(data_document)
+        except Exception as exc:
+            self.get_logger().error("Exception: %s" % str(exc))
+            db_client.close()
+
     def extract_msg_data(self, msg: Any, msg_type: str) -> Any:
         """Extracts data from 'msg' of type 'msg_type'.
 
@@ -243,13 +287,22 @@ def main(args=None):
         rosbag2mongo_converter.register_custom_types(package_names=rosbag2mongo_converter.msg_package_names,
                                                     package_paths=rosbag2mongo_converter.msg_package_paths)
 
-        rosbag2mongo_converter.convert_bag_to_mongo(bag_path=rosbag2mongo_converter.bag_file_path,
-                                                    observation_topics=rosbag2mongo_converter.observation_topics,
-                                                    observation_topic_to_names=rosbag2mongo_converter.observation_topics_to_names,
-                                                    lowest_frequency_topic=rosbag2mongo_converter.lowest_frequency_topic,
-                                                    action_topic=rosbag2mongo_converter.action_topic,
-                                                    dataset_name=rosbag2mongo_converter.dataset_name,
-                                                    robot_name=rosbag2mongo_converter.robot_name)
+        if rosbag2mongo_converter.synchronised_conversion:
+            rosbag2mongo_converter.convert_bag_to_mongo(bag_path=rosbag2mongo_converter.bag_file_path,
+                                                        observation_topics=rosbag2mongo_converter.observation_topics,
+                                                        observation_topic_to_names=rosbag2mongo_converter.observation_topics_to_names,
+                                                        lowest_frequency_topic=rosbag2mongo_converter.lowest_frequency_topic,
+                                                        action_topic=rosbag2mongo_converter.action_topic,
+                                                        dataset_name=rosbag2mongo_converter.dataset_name,
+                                                        robot_name=rosbag2mongo_converter.robot_name)
+        else:
+            rosbag2mongo_converter.convert_bag_to_mongo_unsynchronised(bag_path=rosbag2mongo_converter.bag_file_path,
+                                                                       topics=rosbag2mongo_converter.observation_topics,
+                                                                       topics_to_names=rosbag2mongo_converter.observation_topics_to_names,
+                                                                       dataset_name=rosbag2mongo_converter.dataset_name,
+                                                                       robot_name=rosbag2mongo_converter.robot_name)
+
+        rosbag2mongo_converter.get_logger().info('Conversion complete')
         while rclpy.ok():
             rate.sleep()
     except Exception as exc:
