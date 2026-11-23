@@ -18,7 +18,7 @@ class TFMessageUtils(MessageUtilitiesBase):
         for tf in self.msg.transforms:
             current_tf_data = {}
             current_tf_data['parent_frame'] = tf.header.frame_id
-            current_tf_data['child_frame'] = tf.header.child_frame_id
+            current_tf_data['child_frame'] = tf.child_frame_id
             current_tf_data['transform'] = {}
             current_tf_data['transform']['translation'] = [tf.transform.translation.x, tf.transform.translation.y, tf.transform.translation.z]
             current_tf_data['transform']['rotation'] = [tf.transform.rotation.x, tf.transform.rotation.y, tf.transform.rotation.z, tf.transform.rotation.w]
