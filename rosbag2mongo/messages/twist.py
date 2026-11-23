@@ -7,7 +7,7 @@ from rosbag2mongo.messages.message_utilities_base import MessageUtilitiesBase
 class TwistUtils(MessageUtilitiesBase):
     """Utility interface for messages of type geometry_msgs/msg/Twist.
     """
-    def __init__(self, msg: Imu):
+    def __init__(self, msg: Twist):
         super(TwistUtils, self).__init__(msg)
 
     def get_data(self) -> Dict[str, List[float]]:
