@@ -6,6 +6,7 @@ import threading
 from collections import deque
 from pathlib import Path
 import pymongo as pm
+from natsort import natsorted
 
 import rclpy
 from rclpy.node import Node
@@ -196,12 +197,11 @@ class Rosbag2MongoConverter(Node):
                                             topics_to_names: Dict[str,str],
                                             dataset_name: str,
                                             robot_name: str):
-        """Converts a rosbag to a MongoDB dataset, such that each topic
-        is logged in a separate collection, with each message being logged
-        as a separate document.
+        """Converts a collection of rosbags to a MongoDB dataset, such that each topic
+        is logged in a separate collection, with each message being logged as a separate document.
 
         Keyword arguments:
-        bag_path: str -- Absolute path of a rosbag
+        bag_path: str -- Absolute path of a directory containing rosbags
         topics: Sequence[str]: Names of the topics that should be considered in the conversion
         topics_to_names: Dict[str,str] -- A dictionary in which the keys are topic names (from topics)
                                           and the values are topic names in the Mongo dataset
@@ -214,18 +214,20 @@ class Rosbag2MongoConverter(Node):
         database = db_client[f'{robot_name}-{dataset_name}']
 
         try:
-            self.get_logger().info('Processing rosbag %s' % bag_path)
+            for bag_dir_name in natsorted(os.listdir(bag_path)):
+                bag_dir_path = os.path.join(bag_path, bag_dir_name)
+                self.get_logger().info('Processing rosbag %s' % bag_dir_path)
 
-            with RosbagReader(bag_path) as reader:
-                for connection, timestamp, raw_data in reader.messages():
-                    if connection.topic not in topics:
-                        continue
+                with RosbagReader(bag_dir_path) as reader:
+                    for connection, timestamp, raw_data in reader.messages():
+                        if connection.topic not in topics:
+                            continue
 
-                    msg = self.typestore.deserialize_cdr(raw_data, connection.msgtype)
-                    msg_data = self.extract_msg_data(msg, connection.msgtype)
-                    collection = database[topics_to_names[connection.topic]]
-                    data_document = {'timestamp': int(timestamp / 10**9), 'data': msg_data}
-                    collection.insert_one(data_document)
+                        msg = self.typestore.deserialize_cdr(raw_data, connection.msgtype)
+                        msg_data = self.extract_msg_data(msg, connection.msgtype)
+                        collection = database[topics_to_names[connection.topic]]
+                        data_document = {'timestamp': int(timestamp / 10**9), 'data': msg_data}
+                        collection.insert_one(data_document)
         except Exception as exc:
             self.get_logger().error("Exception: %s" % str(exc))
             db_client.close()
