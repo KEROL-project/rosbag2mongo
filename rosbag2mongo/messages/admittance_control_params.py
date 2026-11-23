@@ -16,9 +16,9 @@ class AdmittanceControlParamsMsgUtils(MessageUtilitiesBase):
         and the values are stored as lists.
         """
         admittance_control_params_data = {
-            'selected_axes': self.msg.selected_axes,
-            'masses': self.msg.masses,
-            'stiffnesses': self.msg.stiffnesses,
-            'damping_ratios': self.msg.damping_ratios
+            'selected_axes': self.msg.selected_axes.tolist() if type(self.msg.selected_axes) == np.ndarray else self.msg.selected_axes,
+            'masses': self.msg.masses.tolist() if type(self.msg.masses) == np.ndarray else self.msg.masses,
+            'stiffnesses': self.msg.stiffnesses.tolist() if type(self.msg.stiffnesses) == np.ndarray else self.msg.stiffnesses,
+            'damping_ratios': self.msg.damping_ratios.tolist() if type(self.msg.damping_ratios) == np.ndarray else self.msg.damping_ratios
         }
         return admittance_control_params_data
