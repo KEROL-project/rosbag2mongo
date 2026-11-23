@@ -229,7 +229,7 @@ class Rosbag2MongoConverter(Node):
                         data_document = {'timestamp': int(timestamp / 10**9), 'data': msg_data}
                         collection.insert_one(data_document)
         except Exception as exc:
-            self.get_logger().error("Exception: %s" % str(exc))
+            self.get_logger().error("Exception while reading rosbag data: %s" % str(exc))
             db_client.close()
 
     def extract_msg_data(self, msg: Any, msg_type: str) -> Any:
@@ -246,7 +246,7 @@ class Rosbag2MongoConverter(Node):
             utility_obj = MsgUtilityClass(msg)
             return utility_obj.get_data()
         except Exception as exc:
-            self.get_logger().error("Exception: %s" % str(exc))
+            self.get_logger().error("Message conversion exception: %s" % str(exc))
 
     @staticmethod
     def get_db_client():
